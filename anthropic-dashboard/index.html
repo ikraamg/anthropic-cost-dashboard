@@ -1,0 +1,1133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Anthropic Usage Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg: #09090b;
+            --card: #111113;
+            --card-border: #1e1e2e;
+            --accent: #d97706;
+            --accent-hover: #f59e0b;
+            --text: #e2e8f0;
+            --text-muted: #94a3b8;
+            --text-dim: #64748b;
+            --success: #22c55e;
+            --error: #ef4444;
+            --radius: 8px;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+
+        .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+
+        /* Header */
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        .header h1 {
+            font-size: 22px;
+            font-weight: 600;
+            background: linear-gradient(135deg, var(--accent), #fbbf24);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .api-key-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .api-key-group label {
+            font-size: 12px;
+            color: var(--text-muted);
+            white-space: nowrap;
+        }
+
+        /* Form Controls */
+        input, select, button { font-family: inherit; font-size: 13px; }
+
+        input[type="text"],
+        input[type="password"],
+        input[type="datetime-local"],
+        select {
+            background: var(--card);
+            border: 1px solid var(--card-border);
+            color: var(--text);
+            padding: 8px 12px;
+            border-radius: var(--radius);
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        input:focus, select:focus { border-color: var(--accent); }
+
+        button {
+            cursor: pointer;
+            padding: 8px 16px;
+            border-radius: var(--radius);
+            border: 1px solid var(--card-border);
+            background: var(--card);
+            color: var(--text);
+            transition: all 0.2s;
+        }
+
+        button:hover { border-color: var(--accent); background: #1a1a2e; }
+
+        button.primary {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #000;
+            font-weight: 600;
+        }
+
+        button.primary:hover { background: var(--accent-hover); }
+        button.primary:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-sm { padding: 4px 10px; font-size: 12px; }
+
+        /* Controls Panel */
+        .controls {
+            background: var(--card);
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius);
+            padding: 20px;
+            margin-bottom: 24px;
+        }
+
+        .controls-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+
+        .control-group { display: flex; flex-direction: column; gap: 4px; }
+
+        .control-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-dim);
+            font-weight: 500;
+        }
+
+        .controls-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding-top: 16px;
+            border-top: 1px solid var(--card-border);
+        }
+
+        .status { font-size: 13px; color: var(--text-muted); }
+        .status.error { color: var(--error); }
+
+        /* Checkbox pills */
+        .checkbox-group { display: flex; flex-wrap: wrap; gap: 6px; }
+
+        .checkbox-group label {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 12px;
+            color: var(--text-muted);
+            cursor: pointer;
+            padding: 4px 10px;
+            background: var(--bg);
+            border-radius: 4px;
+            border: 1px solid var(--card-border);
+            transition: all 0.2s;
+        }
+
+        .checkbox-group label:hover { border-color: var(--accent); }
+        .checkbox-group input:checked + span { color: var(--accent); }
+        .checkbox-group input { accent-color: var(--accent); width: 14px; height: 14px; }
+
+        /* Summary Cards */
+        .summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .card {
+            background: var(--card);
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius);
+            padding: 20px;
+        }
+
+        .card-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-dim);
+            margin-bottom: 4px;
+        }
+
+        .card-value { font-size: 28px; font-weight: 700; }
+        .card-value.cost { color: var(--accent); }
+        .card-sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+
+        /* Chart */
+        .chart-container {
+            background: var(--card);
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius);
+            padding: 20px;
+            margin-bottom: 24px;
+        }
+
+        .section-title {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-muted);
+            margin-bottom: 16px;
+        }
+
+        .chart-wrapper { position: relative; height: 300px; }
+
+        /* Table */
+        .table-container {
+            background: var(--card);
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius);
+            overflow: hidden;
+            margin-bottom: 24px;
+        }
+
+        .table-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--card-border);
+        }
+
+        .table-scroll { overflow-x: auto; }
+
+        table { width: 100%; border-collapse: collapse; }
+
+        th {
+            padding: 10px 16px;
+            text-align: left;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-dim);
+            font-weight: 500;
+            border-bottom: 1px solid var(--card-border);
+            cursor: pointer;
+            user-select: none;
+            white-space: nowrap;
+        }
+
+        th:hover { color: var(--text-muted); }
+        th.sorted { color: var(--accent); }
+
+        td {
+            padding: 10px 16px;
+            font-size: 13px;
+            border-bottom: 1px solid #1a1a2a;
+            white-space: nowrap;
+            font-variant-numeric: tabular-nums;
+        }
+
+        tr:hover td { background: #1a1a24; }
+        tr.selected td { background: #1c1508; }
+        tr.selected:hover td { background: #261e0a; }
+        .num { text-align: right; }
+
+        /* Selection bar */
+        .selection-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: #1a1508;
+            border-top: 2px solid var(--accent);
+            padding: 12px 24px;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            gap: 24px;
+            font-size: 13px;
+            z-index: 100;
+            box-shadow: 0 -4px 20px rgba(0,0,0,0.5);
+        }
+
+        .selection-bar.visible { display: flex; }
+
+        .selection-bar .sel-label {
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        .selection-bar .sel-value {
+            color: var(--accent);
+            font-weight: 700;
+            font-size: 15px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .selection-bar .sel-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .selection-bar .sel-clear {
+            margin-left: 12px;
+            cursor: pointer;
+            color: var(--text-dim);
+            padding: 4px 10px;
+            border-radius: 4px;
+            border: 1px solid var(--card-border);
+            background: none;
+            font-size: 12px;
+        }
+
+        .selection-bar .sel-clear:hover { border-color: var(--accent); color: var(--text); }
+
+        /* Empty / Loading */
+        .empty-state {
+            text-align: center;
+            padding: 60px 24px;
+            color: var(--text-dim);
+        }
+
+        .empty-state p { font-size: 14px; margin-top: 8px; }
+
+        .spinner {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid var(--card-border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+            vertical-align: middle;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* CORS Banner */
+        .cors-banner {
+            background: #1c1917;
+            border: 1px solid #78350f;
+            border-radius: var(--radius);
+            padding: 16px 20px;
+            margin-bottom: 24px;
+            font-size: 13px;
+            color: #fbbf24;
+            display: none;
+        }
+
+        .cors-banner code {
+            background: #000;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding: 16px;
+            font-size: 11px;
+            color: var(--text-dim);
+        }
+
+        .footer a { color: var(--accent); text-decoration: none; }
+
+        @media (max-width: 768px) {
+            .container { padding: 16px; }
+            .header { flex-direction: column; align-items: flex-start; }
+            .card-value { font-size: 22px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Anthropic Usage Dashboard</h1>
+            <div class="api-key-group">
+                <label>Admin API Key</label>
+                <input type="password" id="apiKey" placeholder="sk-ant-admin-..." style="width: 300px;" />
+                <button class="btn-sm" id="toggleKey">Show</button>
+            </div>
+        </div>
+
+        <div class="cors-banner" id="corsBanner">
+            <strong>CORS blocked?</strong> The Anthropic API may not allow browser requests.
+            Run a tiny local proxy:
+            <code>npx cors-anywhere</code> or open Chrome with
+            <code>--disable-web-security --user-data-dir=/tmp/cors</code> for local testing.
+        </div>
+
+        <div class="controls">
+            <div class="controls-grid">
+                <div class="control-group">
+                    <label class="control-label">Start Date</label>
+                    <input type="text" id="startDate" placeholder="2026-03-01 or Mar 1, 2026 14:00" style="width:220px" />
+                </div>
+                <div class="control-group">
+                    <label class="control-label">End Date</label>
+                    <input type="text" id="endDate" placeholder="2026-03-02 or Mar 2, 2026 23:59" style="width:220px" />
+                </div>
+                <div class="control-group">
+                    <label class="control-label">Bucket Width</label>
+                    <select id="bucketWidth">
+                        <option value="1d" selected>1 Day</option>
+                        <option value="1h">1 Hour</option>
+                        <option value="1m">1 Minute</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label class="control-label">Group By</label>
+                    <select id="groupBy">
+                        <option value="model" selected>Model</option>
+                        <option value="api_key_id">API Key</option>
+                        <option value="workspace_id">Workspace</option>
+                        <option value="service_tier">Service Tier</option>
+                        <option value="context_window">Context Window</option>
+                        <option value="inference_geo">Data Residency</option>
+                        <option value="speed">Speed (beta)</option>
+                    </select>
+                </div>
+            </div>
+
+            <div style="margin-bottom: 16px;">
+                <label class="control-label" style="display:block; margin-bottom:8px;">Service Tier</label>
+                <div class="checkbox-group">
+                    <label><input type="checkbox" name="tier" value="standard" checked /><span>Standard</span></label>
+                    <label><input type="checkbox" name="tier" value="batch" checked /><span>Batch</span></label>
+                    <label><input type="checkbox" name="tier" value="flex" checked /><span>Flex</span></label>
+                    <label><input type="checkbox" name="tier" value="flex_discount" checked /><span>Flex Discount</span></label>
+                    <label><input type="checkbox" name="tier" value="priority" checked /><span>Priority</span></label>
+                    <label><input type="checkbox" name="tier" value="priority_on_demand" checked /><span>Priority On-Demand</span></label>
+                </div>
+            </div>
+
+            <div class="controls-actions">
+                <button class="primary" id="fetchBtn">Fetch Usage</button>
+                <button id="exportBtn">Export CSV</button>
+                <span class="status" id="status"></span>
+            </div>
+        </div>
+
+        <div class="summary" id="summary" style="display:none;">
+            <div class="card">
+                <div class="card-label">Estimated Total Cost</div>
+                <div class="card-value cost" id="totalCost">$0.00</div>
+                <div class="card-sub" id="costSub"></div>
+            </div>
+            <div class="card">
+                <div class="card-label">Input Tokens</div>
+                <div class="card-value" id="totalInput">0</div>
+                <div class="card-sub" id="inputSub"></div>
+            </div>
+            <div class="card">
+                <div class="card-label">Output Tokens</div>
+                <div class="card-value" id="totalOutput">0</div>
+                <div class="card-sub" id="outputSub"></div>
+            </div>
+            <div class="card">
+                <div class="card-label">Cache Read Tokens</div>
+                <div class="card-value" id="totalCacheRead">0</div>
+                <div class="card-sub" id="cacheSub"></div>
+            </div>
+        </div>
+
+        <div class="chart-container" id="chartSection" style="display:none;">
+            <div class="section-title">Cost Over Time</div>
+            <div class="chart-wrapper">
+                <canvas id="costChart"></canvas>
+            </div>
+        </div>
+
+        <div class="table-container" id="tableSection" style="display:none;">
+            <div class="table-bar">
+                <div class="section-title" style="margin:0">Detailed Breakdown</div>
+                <span class="status" id="rowCount"></span>
+            </div>
+            <div class="table-scroll">
+                <table>
+                    <thead id="tableHead"></thead>
+                    <tbody id="tableBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="table-container" id="costLogSection" style="display:none;">
+            <div class="table-bar">
+                <div class="section-title" style="margin:0">Cost Log (per entry)</div>
+                <span class="status" id="logCount"></span>
+            </div>
+            <div class="table-scroll">
+                <table>
+                    <thead id="logHead"></thead>
+                    <tbody id="logBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="empty-state" id="emptyState">
+            <p style="font-size:16px;">Enter your Admin API key and click <strong>Fetch Usage</strong></p>
+            <p>Requires an admin key (<code style="background:#1e1e2e;padding:2px 6px;border-radius:4px;font-size:12px;">sk-ant-admin-...</code>) from the Anthropic Console.</p>
+        </div>
+
+        <div class="selection-bar" id="selectionBar">
+            <div class="sel-item"><span class="sel-label">Selected:</span> <span class="sel-value" id="selCount">0</span></div>
+            <div class="sel-item"><span class="sel-label">Input $</span> <span class="sel-value" id="selInput">$0</span></div>
+            <div class="sel-item"><span class="sel-label">Output $</span> <span class="sel-value" id="selOutput">$0</span></div>
+            <div class="sel-item"><span class="sel-label">Cache $</span> <span class="sel-value" id="selCache">$0</span></div>
+            <div class="sel-item"><span class="sel-label">Total</span> <span class="sel-value" id="selTotal" style="font-size:18px;">$0</span></div>
+            <button class="sel-clear" onclick="clearSelection()">Clear</button>
+        </div>
+
+        <div class="footer">
+            Pricing estimates based on published rates &mdash; verify at
+            <a href="https://docs.anthropic.com/en/docs/about-claude/pricing" target="_blank" rel="noopener">Anthropic Pricing</a>.
+            Your API key is saved in localStorage and only sent to api.anthropic.com.
+        </div>
+    </div>
+
+    <script>
+    // NOTE: Update pricing as Anthropic changes rates.
+    // Prices are per million tokens. Source: https://docs.anthropic.com/en/docs/about-claude/pricing
+    const MODEL_PRICING = {
+        'claude-opus-4-6':       { input: 5.00,  output: 25.00 },
+        'claude-sonnet-4-6':     { input: 3.00,  output: 15.00 },
+        'claude-haiku-4-5':      { input: 1.00,  output: 5.00  },
+        'claude-sonnet-4-5':     { input: 3.00,  output: 15.00 },
+        'claude-opus-4-0':       { input: 15.00, output: 75.00 },
+        'claude-sonnet-4-0':     { input: 3.00,  output: 15.00 },
+        'claude-3-5-sonnet':     { input: 3.00,  output: 15.00 },
+        'claude-3-5-haiku':      { input: 0.80,  output: 4.00  },
+        'claude-3-opus':         { input: 15.00, output: 75.00 },
+        'claude-3-sonnet':       { input: 3.00,  output: 15.00 },
+        'claude-3-haiku':        { input: 0.25,  output: 1.25  },
+    };
+
+    const CACHE_READ_MULT  = 0.1;   // 90% cheaper than base input
+    const CACHE_WRITE_MULT = 1.25;  // 25% premium over base input
+    const BATCH_DISCOUNT   = 0.5;
+
+    // === State ===
+    let chart    = null;
+    let rawData  = [];
+    let sortCol  = 'cost';
+    let sortDir  = -1; // descending by cost
+
+    // === Init ===
+    (function init() {
+        const now = new Date();
+        const ago = new Date(now);
+        ago.setDate(ago.getDate() - 7);
+        ago.setHours(0, 0, 0, 0);
+
+        document.getElementById('startDate').value = fmtDateInput(ago);
+        document.getElementById('endDate').value   = fmtDateInput(now);
+
+        document.getElementById('toggleKey').addEventListener('click', toggleKey);
+        document.getElementById('fetchBtn').addEventListener('click', fetchUsage);
+        document.getElementById('exportBtn').addEventListener('click', exportCSV);
+
+        // Restore saved API key
+        const saved = localStorage.getItem('anthropic_admin_key');
+        if (saved) document.getElementById('apiKey').value = saved;
+
+        // Save key on change
+        document.getElementById('apiKey').addEventListener('input', () => {
+            localStorage.setItem('anthropic_admin_key', document.getElementById('apiKey').value.trim());
+        });
+
+        // Enter key on API key input triggers fetch
+        document.getElementById('apiKey').addEventListener('keydown', e => {
+            if (e.key === 'Enter') fetchUsage();
+        });
+    })();
+
+    function fmtDateInput(d) {
+        return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+    }
+
+    function p(n) { return String(n).padStart(2, '0'); }
+
+    // Flexible date parsing: "2026-03-01", "2026-03-01 14:30", "Mar 1, 2026", etc.
+    function parseDate(str) {
+        if (!str || !str.trim()) return null;
+        const s = str.trim();
+        // Try native Date parsing (handles most formats)
+        const d = new Date(s);
+        if (!isNaN(d.getTime())) return d;
+        // Try replacing space with T for ISO-ish: "2026-03-01 14:00" → "2026-03-01T14:00"
+        const d2 = new Date(s.replace(' ', 'T'));
+        if (!isNaN(d2.getTime())) return d2;
+        return null;
+    }
+
+    function toggleKey() {
+        const inp = document.getElementById('apiKey');
+        const btn = document.getElementById('toggleKey');
+        const show = inp.type === 'password';
+        inp.type = show ? 'text' : 'password';
+        btn.textContent = show ? 'Hide' : 'Show';
+    }
+
+    // === Pricing Lookup ===
+    function getPricing(modelId) {
+        if (!modelId) return { input: 3, output: 15 };
+        const id = modelId.toLowerCase();
+        for (const [key, pr] of Object.entries(MODEL_PRICING)) {
+            if (id.includes(key)) return pr;
+        }
+        // Fallback by family name
+        if (id.includes('opus'))   return { input: 15, output: 75 };
+        if (id.includes('haiku'))  return { input: 1,  output: 5  };
+        return { input: 3, output: 15 };
+    }
+
+    // === Cost Calculation ===
+    function calcCost(row) {
+        const pr   = getPricing(row.model);
+        const tier = (row.service_tier || '').toLowerCase();
+        const mult = tier === 'batch' ? BATCH_DISCOUNT : 1;
+
+        const inp    = (row.uncached_input_tokens || 0) / 1e6 * pr.input * mult;
+        const out    = (row.output_tokens || 0) / 1e6 * pr.output * mult;
+        const cRead  = (row.cache_read_input_tokens || 0) / 1e6 * pr.input * CACHE_READ_MULT * mult;
+        const cWrite = ((row.ephemeral_5m_input_tokens || 0) + (row.ephemeral_1h_input_tokens || 0))
+                       / 1e6 * pr.input * CACHE_WRITE_MULT * mult;
+
+        return { input: inp, output: out, cacheRead: cRead, cacheWrite: cWrite,
+                 total: inp + out + cRead + cWrite };
+    }
+
+    // === Fetch Data ===
+    async function fetchUsage() {
+        const apiKey = document.getElementById('apiKey').value.trim();
+        if (!apiKey) return setStatus('Enter your Admin API key', true);
+
+        const startParsed = parseDate(document.getElementById('startDate').value);
+        const endParsed   = parseDate(document.getElementById('endDate').value);
+        const bucket = document.getElementById('bucketWidth').value;
+        const group  = document.getElementById('groupBy').value;
+
+        if (!startParsed || !endParsed) return setStatus('Invalid date — try: 2026-03-01 or Mar 1, 2026 14:00', true);
+
+        const params = new URLSearchParams();
+        params.set('starting_at',  startParsed.toISOString());
+        params.set('ending_at',    endParsed.toISOString());
+        params.set('bucket_width', bucket);
+        params.append('group_by[]', group);
+
+        // Only send service_tiers filter if user unchecked some (null tiers get excluded otherwise)
+        const allTiers = document.querySelectorAll('input[name="tier"]');
+        const checkedTiers = document.querySelectorAll('input[name="tier"]:checked');
+        if (checkedTiers.length > 0 && checkedTiers.length < allTiers.length) {
+            checkedTiers.forEach(c => params.append('service_tiers[]', c.value));
+        }
+
+        const btn = document.getElementById('fetchBtn');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span> Fetching...';
+        setStatus('');
+        document.getElementById('corsBanner').style.display = 'none';
+
+        try {
+            const headers = { 'anthropic-version': '2023-06-01', 'x-api-key': apiKey };
+            if (group === 'speed') headers['anthropic-beta'] = 'fast-mode-2026-02-01';
+
+            // Fetch all pages
+            rawData = [];
+            let pageUrl = `${apiBase()}/v1/organizations/usage_report/messages?${params}`;
+            let page = 1;
+
+            while (pageUrl) {
+                setStatus(`Fetching page ${page}...`);
+                const resp = await fetch(pageUrl, { headers });
+
+                if (!resp.ok) {
+                    const body = await resp.json().catch(() => ({}));
+                    throw new Error(body.error?.message || `HTTP ${resp.status}`);
+                }
+
+                const json = await resp.json();
+
+                // Flatten nested structure: data[].results[] → flat rows
+                for (const bucket of (json.data || [])) {
+                    for (const r of (bucket.results || [])) {
+                        rawData.push({
+                            bucket_start_time: bucket.starting_at,
+                            uncached_input_tokens: r.uncached_input_tokens || 0,
+                            output_tokens: r.output_tokens || 0,
+                            cache_read_input_tokens: r.cache_read_input_tokens || 0,
+                            ephemeral_5m_input_tokens: r.cache_creation?.ephemeral_5m_input_tokens || 0,
+                            ephemeral_1h_input_tokens: r.cache_creation?.ephemeral_1h_input_tokens || 0,
+                            web_search_requests: r.server_tool_use?.web_search_requests || 0,
+                            model: r.model,
+                            api_key_id: r.api_key_id,
+                            workspace_id: r.workspace_id,
+                            service_tier: r.service_tier,
+                            context_window: r.context_window,
+                            inference_geo: r.inference_geo,
+                        });
+                    }
+                }
+
+                // Follow pagination
+                if (json.has_more && json.next_page) {
+                    const sep = params.toString() ? '&' : '?';
+                    pageUrl = `${apiBase()}/v1/organizations/usage_report/messages?${params}&page=${json.next_page}`;
+                    page++;
+                } else {
+                    pageUrl = null;
+                }
+            }
+
+            if (!rawData.length) {
+                setStatus('No data for this range');
+                hideResults();
+                return;
+            }
+
+            setStatus(`${rawData.length} records`);
+            showResults();
+
+        } catch (err) {
+            const msg = err.message || '';
+            if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('Load failed')) {
+                setStatus('Network error — likely CORS. See banner above.', true);
+                document.getElementById('corsBanner').style.display = 'block';
+            } else {
+                setStatus(msg, true);
+            }
+            hideResults();
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Fetch Usage';
+        }
+    }
+
+    // === Render Orchestration ===
+    function showResults() {
+        document.getElementById('emptyState').style.display   = 'none';
+        document.getElementById('summary').style.display      = 'grid';
+        document.getElementById('chartSection').style.display  = 'block';
+        document.getElementById('tableSection').style.display   = 'block';
+        document.getElementById('costLogSection').style.display = 'block';
+        renderSummary();
+        renderChart();
+        renderTable();
+        renderCostLog();
+    }
+
+    function hideResults() {
+        document.getElementById('emptyState').style.display   = 'block';
+        document.getElementById('summary').style.display      = 'none';
+        document.getElementById('chartSection').style.display  = 'none';
+        document.getElementById('tableSection').style.display   = 'none';
+        document.getElementById('costLogSection').style.display = 'none';
+    }
+
+    // === Summary Cards ===
+    function renderSummary() {
+        let totalCost = 0, inCost = 0, outCost = 0;
+        let totalIn = 0, totalOut = 0, totalCR = 0;
+
+        for (const row of rawData) {
+            const c = calcCost(row);
+            totalCost += c.total;
+            inCost    += c.input;
+            outCost   += c.output;
+            totalIn   += row.uncached_input_tokens || 0;
+            totalOut  += row.output_tokens || 0;
+            totalCR   += row.cache_read_input_tokens || 0;
+        }
+
+        const s = parseDate(document.getElementById('startDate').value) || new Date();
+        const e = parseDate(document.getElementById('endDate').value) || new Date();
+        const days = Math.max(1, (e - s) / 864e5);
+
+        document.getElementById('totalCost').textContent  = fmtDollars(totalCost);
+        document.getElementById('costSub').textContent    = `~${fmtDollars(totalCost / days)}/day`;
+
+        document.getElementById('totalInput').textContent = fmtNum(totalIn);
+        document.getElementById('inputSub').textContent   = `${(totalIn / 1e6).toFixed(2)} MTok · ${fmtDollars(inCost)}`;
+
+        document.getElementById('totalOutput').textContent = fmtNum(totalOut);
+        document.getElementById('outputSub').textContent   = `${(totalOut / 1e6).toFixed(2)} MTok · ${fmtDollars(outCost)}`;
+
+        document.getElementById('totalCacheRead').textContent = fmtNum(totalCR);
+        const rate = (totalIn + totalCR) > 0
+            ? ((totalCR / (totalIn + totalCR)) * 100).toFixed(1) : '0.0';
+        document.getElementById('cacheSub').textContent = `${rate}% hit rate`;
+    }
+
+    // === Chart ===
+    function renderChart() {
+        const group = document.getElementById('groupBy').value;
+        const buckets = {};
+        const groups  = new Set();
+
+        for (const row of rawData) {
+            const t = row.bucket_start_time;
+            const g = row[group] || 'unknown';
+            groups.add(g);
+            if (!buckets[t]) buckets[t] = {};
+            buckets[t][g] = (buckets[t][g] || 0) + calcCost(row).total;
+        }
+
+        const times     = Object.keys(buckets).sort();
+        const groupList = [...groups].sort();
+        const palette   = ['#d97706','#3b82f6','#22c55e','#ef4444','#8b5cf6',
+                           '#ec4899','#14b8a6','#f97316','#6366f1','#84cc16'];
+
+        const datasets = groupList.map((g, i) => ({
+            label: g,
+            data: times.map(t => buckets[t][g] || 0),
+            backgroundColor: palette[i % palette.length] + 'bb',
+            borderColor: palette[i % palette.length],
+            borderWidth: 1,
+            borderRadius: 2,
+        }));
+
+        if (chart) chart.destroy();
+
+        chart = new Chart(document.getElementById('costChart'), {
+            type: 'bar',
+            data: { labels: times.map(fmtTime), datasets },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: ctx => `${ctx.dataset.label}: ${fmtDollars(ctx.raw)}`,
+                            footer: items => `Total: ${fmtDollars(items.reduce((s,i) => s + i.raw, 0))}`
+                        }
+                    },
+                    legend: { labels: { color: '#94a3b8', font: { size: 11 }, boxWidth: 12, padding: 16 } }
+                },
+                scales: {
+                    x: {
+                        stacked: true,
+                        ticks: { color: '#64748b', font: { size: 10 }, maxRotation: 45 },
+                        grid:  { color: '#1e1e2e' }
+                    },
+                    y: {
+                        stacked: true,
+                        ticks: { color: '#64748b', font: { size: 10 }, callback: v => '$' + v.toFixed(2) },
+                        grid:  { color: '#1e1e2e' }
+                    }
+                }
+            }
+        });
+    }
+
+    // === Table ===
+    function renderTable() {
+        const group = document.getElementById('groupBy').value;
+        const groupLabel = {
+            model: 'Model', api_key_id: 'API Key', workspace_id: 'Workspace',
+            service_tier: 'Tier', context_window: 'Ctx Window',
+            inference_geo: 'Geo', speed: 'Speed'
+        }[group] || group;
+
+        const rows = rawData.map(row => ({
+            time:        row.bucket_start_time,
+            group:       row[group] || 'N/A',
+            input:       row.uncached_input_tokens || 0,
+            output:      row.output_tokens || 0,
+            cache_read:  row.cache_read_input_tokens || 0,
+            cache_write: (row.ephemeral_5m_input_tokens || 0) + (row.ephemeral_1h_input_tokens || 0),
+            cost:        calcCost(row).total
+        }));
+
+        if (sortCol) {
+            rows.sort((a, b) => {
+                const av = a[sortCol], bv = b[sortCol];
+                return (typeof av === 'string' ? av.localeCompare(bv) : av - bv) * sortDir;
+            });
+        }
+
+        const cols = [
+            { key: 'time',        label: 'Time' },
+            { key: 'group',       label: groupLabel },
+            { key: 'input',       label: 'Input Tokens',  num: true },
+            { key: 'output',      label: 'Output Tokens', num: true },
+            { key: 'cache_read',  label: 'Cache Read',    num: true },
+            { key: 'cache_write', label: 'Cache Write',   num: true },
+            { key: 'cost',        label: 'Est. Cost',     num: true },
+        ];
+
+        const arrow = col => sortCol === col ? (sortDir > 0 ? ' ↑' : ' ↓') : '';
+
+        document.getElementById('tableHead').innerHTML =
+            '<tr>' + cols.map(c =>
+                `<th class="${c.num ? 'num' : ''} ${sortCol === c.key ? 'sorted' : ''}"
+                     data-col="${c.key}">${c.label}${arrow(c.key)}</th>`
+            ).join('') + '</tr>';
+
+        document.getElementById('tableBody').innerHTML = rows.map(r =>
+            `<tr>
+                <td>${fmtTime(r.time)}</td>
+                <td>${r.group}</td>
+                <td class="num">${fmtNum(r.input)}</td>
+                <td class="num">${fmtNum(r.output)}</td>
+                <td class="num">${fmtNum(r.cache_read)}</td>
+                <td class="num">${fmtNum(r.cache_write)}</td>
+                <td class="num" style="color:var(--accent);font-weight:600">${fmtDollars(r.cost)}</td>
+            </tr>`
+        ).join('');
+
+        // Sortable headers
+        document.querySelectorAll('#tableHead th').forEach(th => {
+            th.onclick = () => {
+                const col = th.dataset.col;
+                sortDir = sortCol === col ? sortDir * -1 : 1;
+                sortCol = col;
+                renderTable();
+            };
+        });
+
+        document.getElementById('rowCount').textContent = `${rows.length} rows`;
+    }
+
+    // === Cost Log with Selection ===
+    let logSortCol = 'time';
+    let logSortDir = -1;
+    let logRows = [];
+    let selected = new Set();
+    let lastClicked = null;
+
+    function renderCostLog() {
+        logRows = rawData.map(row => {
+            const c = calcCost(row);
+            return {
+                time:       row.bucket_start_time,
+                model:      row.model || 'N/A',
+                input:      c.input,
+                output:     c.output,
+                cache:      c.cacheRead + c.cacheWrite,
+                total:      c.total,
+                in_tokens:  row.uncached_input_tokens || 0,
+                out_tokens: row.output_tokens || 0,
+            };
+        });
+
+        if (logSortCol) {
+            logRows.sort((a, b) => {
+                const av = a[logSortCol], bv = b[logSortCol];
+                return (typeof av === 'string' ? av.localeCompare(bv) : av - bv) * logSortDir;
+            });
+        }
+
+        selected.clear();
+        lastClicked = null;
+
+        const cols = [
+            { key: 'time',       label: 'Timestamp' },
+            { key: 'model',      label: 'Model' },
+            { key: 'in_tokens',  label: 'Input Tok',   num: true },
+            { key: 'out_tokens', label: 'Output Tok',  num: true },
+            { key: 'input',      label: 'Input $',     num: true },
+            { key: 'output',     label: 'Output $',    num: true },
+            { key: 'cache',      label: 'Cache $',     num: true },
+            { key: 'total',      label: 'Total Cost',  num: true },
+        ];
+
+        const arrow = col => logSortCol === col ? (logSortDir > 0 ? ' ↑' : ' ↓') : '';
+
+        document.getElementById('logHead').innerHTML =
+            '<tr>' + cols.map(c =>
+                `<th class="${c.num ? 'num' : ''} ${logSortCol === c.key ? 'sorted' : ''}"
+                     data-col="${c.key}">${c.label}${arrow(c.key)}</th>`
+            ).join('') + '</tr>';
+
+        document.getElementById('logBody').innerHTML = logRows.map((r, i) =>
+            `<tr data-idx="${i}">
+                <td>${fmtFullTime(r.time)}</td>
+                <td>${r.model}</td>
+                <td class="num">${fmtNum(r.in_tokens)}</td>
+                <td class="num">${fmtNum(r.out_tokens)}</td>
+                <td class="num">${fmtDollars(r.input)}</td>
+                <td class="num">${fmtDollars(r.output)}</td>
+                <td class="num">${fmtDollars(r.cache)}</td>
+                <td class="num" style="color:var(--accent);font-weight:600">${fmtDollars(r.total)}</td>
+            </tr>`
+        ).join('');
+
+        // Row click → selection
+        document.getElementById('logBody').addEventListener('click', handleRowClick);
+
+        // Header sort
+        document.querySelectorAll('#logHead th').forEach(th => {
+            th.onclick = () => {
+                const col = th.dataset.col;
+                logSortDir = logSortCol === col ? logSortDir * -1 : -1;
+                logSortCol = col;
+                renderCostLog();
+            };
+        });
+
+        document.getElementById('logCount').textContent = `${logRows.length} entries`;
+        updateSelectionBar();
+    }
+
+    function handleRowClick(e) {
+        const tr = e.target.closest('tr');
+        if (!tr) return;
+        const idx = parseInt(tr.dataset.idx);
+        if (isNaN(idx)) return;
+
+        if (e.shiftKey && lastClicked !== null) {
+            // Range select
+            const lo = Math.min(lastClicked, idx);
+            const hi = Math.max(lastClicked, idx);
+            for (let i = lo; i <= hi; i++) selected.add(i);
+        } else if (e.metaKey || e.ctrlKey) {
+            // Toggle single
+            selected.has(idx) ? selected.delete(idx) : selected.add(idx);
+        } else {
+            // Single (clear others)
+            selected.clear();
+            selected.add(idx);
+        }
+        lastClicked = idx;
+        updateSelectionUI();
+    }
+
+    function updateSelectionUI() {
+        document.querySelectorAll('#logBody tr').forEach(tr => {
+            const idx = parseInt(tr.dataset.idx);
+            tr.classList.toggle('selected', selected.has(idx));
+        });
+        updateSelectionBar();
+    }
+
+    function updateSelectionBar() {
+        const bar = document.getElementById('selectionBar');
+        if (selected.size === 0) {
+            bar.classList.remove('visible');
+            return;
+        }
+
+        let inp = 0, out = 0, cache = 0, total = 0;
+        for (const i of selected) {
+            const r = logRows[i];
+            if (!r) continue;
+            inp   += r.input;
+            out   += r.output;
+            cache += r.cache;
+            total += r.total;
+        }
+
+        document.getElementById('selCount').textContent = selected.size;
+        document.getElementById('selInput').textContent  = fmtDollars(inp);
+        document.getElementById('selOutput').textContent = fmtDollars(out);
+        document.getElementById('selCache').textContent  = fmtDollars(cache);
+        document.getElementById('selTotal').textContent  = fmtDollars(total);
+        bar.classList.add('visible');
+    }
+
+    function clearSelection() {
+        selected.clear();
+        lastClicked = null;
+        updateSelectionUI();
+    }
+
+    function fmtFullTime(iso) {
+        if (!iso) return '';
+        const d = new Date(iso);
+        return d.toLocaleString('en-US', {
+            month: 'short', day: 'numeric', hour: 'numeric',
+            minute: '2-digit', second: '2-digit', hour12: true
+        });
+    }
+
+    // === CSV Export ===
+    function exportCSV() {
+        if (!rawData.length) return setStatus('No data to export', true);
+
+        const group = document.getElementById('groupBy').value;
+        const head  = ['Time', group, 'Input Tokens', 'Output Tokens', 'Cache Read', 'Cache Write', 'Est. Cost'];
+        const body  = rawData.map(row => [
+            row.bucket_start_time,
+            row[group] || '',
+            row.uncached_input_tokens || 0,
+            row.output_tokens || 0,
+            row.cache_read_input_tokens || 0,
+            (row.ephemeral_5m_input_tokens || 0) + (row.ephemeral_1h_input_tokens || 0),
+            calcCost(row).total.toFixed(6)
+        ]);
+
+        const csv  = [head, ...body].map(r => r.join(',')).join('\n');
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const a    = document.createElement('a');
+        a.href     = URL.createObjectURL(blob);
+        a.download = `anthropic-usage-${new Date().toISOString().slice(0, 10)}.csv`;
+        a.click();
+    }
+
+    // === Formatters ===
+    function fmtDollars(n) {
+        if (n >= 1)    return '$' + n.toFixed(2);
+        if (n >= 0.01) return '$' + n.toFixed(4);
+        return '$' + n.toFixed(6);
+    }
+
+    function fmtNum(n) {
+        if (n >= 1e9) return (n / 1e9).toFixed(1) + 'B';
+        if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
+        if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
+        return n.toLocaleString();
+    }
+
+    function fmtTime(iso) {
+        if (!iso) return '';
+        const d = new Date(iso);
+        const bw = document.getElementById('bucketWidth').value;
+        if (bw === '1d') return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        if (bw === '1h') return d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric' });
+        return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    }
+
+    // NOTE: When served via proxy (localhost), use relative URLs to avoid CORS.
+    // When opened as a file, hit the API directly.
+    function apiBase() {
+        const h = location.hostname;
+        return (h === 'localhost' || h === '127.0.0.1') ? '' : 'https://api.anthropic.com';
+    }
+
+    function setStatus(msg, err) {
+        const el = document.getElementById('status');
+        el.textContent = msg;
+        el.className = 'status' + (err ? ' error' : '');
+    }
+    </script>
+</body>
+</html>
