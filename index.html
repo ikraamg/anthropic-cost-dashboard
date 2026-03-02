@@ -4,7 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Anthropic Usage Dashboard</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"
+            integrity="sha384-vsrfeLOOY6KuIYKDlmVH5UiBmgIdB1oEf7p01YgWHuqmOHfZr374+odEv96n9tNC"
+            crossorigin="anonymous"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -331,25 +333,6 @@
 
         @keyframes spin { to { transform: rotate(360deg); } }
 
-        /* CORS Banner */
-        .cors-banner {
-            background: #1c1917;
-            border: 1px solid #78350f;
-            border-radius: var(--radius);
-            padding: 16px 20px;
-            margin-bottom: 24px;
-            font-size: 13px;
-            color: #fbbf24;
-            display: none;
-        }
-
-        .cors-banner code {
-            background: #000;
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-size: 12px;
-        }
-
         /* Footer */
         .footer {
             text-align: center;
@@ -376,13 +359,6 @@
                 <input type="password" id="apiKey" placeholder="sk-ant-admin-..." style="width: 300px;" />
                 <button class="btn-sm" id="toggleKey">Show</button>
             </div>
-        </div>
-
-        <div class="cors-banner" id="corsBanner">
-            <strong>CORS blocked?</strong> The Anthropic API may not allow browser requests.
-            Run a tiny local proxy:
-            <code>npx cors-anywhere</code> or open Chrome with
-            <code>--disable-web-security --user-data-dir=/tmp/cors</code> for local testing.
         </div>
 
         <div class="controls">
@@ -509,7 +485,7 @@
         <div class="footer">
             Pricing estimates based on published rates &mdash; verify at
             <a href="https://docs.anthropic.com/en/docs/about-claude/pricing" target="_blank" rel="noopener">Anthropic Pricing</a>.
-            Your API key is saved in localStorage and only sent to api.anthropic.com.
+            Your API key is kept in memory only and sent to api.anthropic.com via server-side proxy.
         </div>
     </div>
 
@@ -553,15 +529,6 @@
         document.getElementById('toggleKey').addEventListener('click', toggleKey);
         document.getElementById('fetchBtn').addEventListener('click', fetchUsage);
         document.getElementById('exportBtn').addEventListener('click', exportCSV);
-
-        // Restore saved API key
-        const saved = localStorage.getItem('anthropic_admin_key');
-        if (saved) document.getElementById('apiKey').value = saved;
-
-        // Save key on change
-        document.getElementById('apiKey').addEventListener('input', () => {
-            localStorage.setItem('anthropic_admin_key', document.getElementById('apiKey').value.trim());
-        });
 
         // Enter key on API key input triggers fetch
         document.getElementById('apiKey').addEventListener('keydown', e => {
@@ -654,7 +621,6 @@
         btn.disabled = true;
         btn.innerHTML = '<span class="spinner"></span> Fetching...';
         setStatus('');
-        document.getElementById('corsBanner').style.display = 'none';
 
         try {
             const headers = { 'anthropic-version': '2023-06-01', 'x-api-key': apiKey };
@@ -717,13 +683,7 @@
             showResults();
 
         } catch (err) {
-            const msg = err.message || '';
-            if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('Load failed')) {
-                setStatus('Network error — likely CORS. See banner above.', true);
-                document.getElementById('corsBanner').style.display = 'block';
-            } else {
-                setStatus(msg, true);
-            }
+            setStatus(err.message || 'Request failed', true);
             hideResults();
         } finally {
             btn.disabled = false;
@@ -895,7 +855,7 @@
         document.getElementById('tableBody').innerHTML = rows.map(r =>
             `<tr>
                 <td>${fmtTime(r.time)}</td>
-                <td>${r.group}</td>
+                <td>${esc(r.group)}</td>
                 <td class="num">${fmtNum(r.input)}</td>
                 <td class="num">${fmtNum(r.output)}</td>
                 <td class="num">${fmtNum(r.cache_read)}</td>
@@ -971,7 +931,7 @@
         document.getElementById('logBody').innerHTML = logRows.map((r, i) =>
             `<tr data-idx="${i}">
                 <td>${fmtFullTime(r.time)}</td>
-                <td>${r.model}</td>
+                <td>${esc(r.model)}</td>
                 <td class="num">${fmtNum(r.in_tokens)}</td>
                 <td class="num">${fmtNum(r.out_tokens)}</td>
                 <td class="num">${fmtDollars(r.input)}</td>
@@ -1116,11 +1076,15 @@
         return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
     }
 
-    // NOTE: When served via proxy (localhost), use relative URLs to avoid CORS.
-    // When opened as a file, hit the API directly.
-    function apiBase() {
-        const h = location.hostname;
-        return (h === 'localhost' || h === '127.0.0.1') ? '' : 'https://api.anthropic.com';
+    // Always use relative URLs — both serve.js (local) and Cloudflare Function (prod) proxy to Anthropic
+    function apiBase() { return ''; }
+
+    // XSS prevention: escape API response strings before inserting into HTML
+    function esc(s) {
+        if (s == null) return '';
+        const d = document.createElement('div');
+        d.textContent = String(s);
+        return d.innerHTML;
     }
 
     function setStatus(msg, err) {
