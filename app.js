@@ -44,8 +44,9 @@
         });
     })();
 
+    // datetime-local inputs expect YYYY-MM-DDTHH:MM format
     function fmtDateInput(d) {
-        return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+        return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
     }
 
     function p(n) { return String(n).padStart(2, '0'); }
