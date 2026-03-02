@@ -40,7 +40,7 @@ http.createServer(async (req, res) => {
     // Serve static files (dashboard HTML)
     const file = req.url === '/' ? 'index.html' : req.url.slice(1);
     try {
-        const content = fs.readFileSync(path.join(__dirname, file));
+        const content = fs.readFileSync(path.join(__dirname, 'public', file));
         const ext = path.extname(file);
         const mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css' }[ext] || 'text/plain';
         res.writeHead(200, { 'Content-Type': mime });
