@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Anthropic Usage Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"
+            integrity="sha384-vsrfeLOOY6KuIYKDlmVH5UiBmgIdB1oEf7p01YgWHuqmOHfZr374+odEv96n9tNC"
+            crossorigin="anonymous"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg: #09090b;
+            --card: #111113;
+            --card-border: #1e1e2e;
+            --accent: #d97706;
+            --accent-hover: #f59e0b;
+            --text: #e2e8f0;
+            --text-muted: #94a3b8;
+            --text-dim: #64748b;
+            --success: #22c55e;
+            --error: #ef4444;
+            --radius: 8px;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            color-scheme: dark;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+
+        .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+
+        /* Header */
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        .header h1 {
+            font-size: 22px;
+            font-weight: 600;
+            background: linear-gradient(135deg, var(--accent), #fbbf24);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .api-key-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .api-key-group label {
+            font-size: 12px;
+            color: var(--text-muted);
+            white-space: nowrap;
+        }
+
+        /* Form Controls */
+        input, select, button { font-family: inherit; font-size: 13px; }
+
+        input[type="text"],
+        input[type="password"],
+        input[type="datetime-local"],
+        select {
+            background: var(--card);
+            border: 1px solid var(--card-border);
+            color: var(--text);
+            padding: 8px 12px;
+            border-radius: var(--radius);
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        input:focus, select:focus { border-color: var(--accent); }
+
+        button {
+            cursor: pointer;
+            padding: 8px 16px;
+            border-radius: var(--radius);
+            border: 1px solid var(--card-border);
+            background: var(--card);
+            color: var(--text);
+            transition: all 0.2s;
+        }
+
+        button:hover { border-color: var(--accent); background: #1a1a2e; }
+
+        button.primary {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #000;
+            font-weight: 600;
+        }
+
+        button.primary:hover { background: var(--accent-hover); }
+        button.primary:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-sm { padding: 4px 10px; font-size: 12px; }
+
+        /* Controls Panel */
+        .controls {
+            background: var(--card);
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius);
+            padding: 20px;
+            margin-bottom: 24px;
+        }
+
+        .controls-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+
+        .control-group { display: flex; flex-direction: column; gap: 4px; }
+
+        .control-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-dim);
+            font-weight: 500;
+        }
+
+        .controls-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding-top: 16px;
+            border-top: 1px solid var(--card-border);
+        }
+
+        .status { font-size: 13px; color: var(--text-muted); }
+        .status.error { color: var(--error); }
+
+        /* Checkbox pills */
+        .checkbox-group { display: flex; flex-wrap: wrap; gap: 6px; }
+
+        .checkbox-group label {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 12px;
+            color: var(--text-muted);
+            cursor: pointer;
+            padding: 4px 10px;
+            background: var(--bg);
+            border-radius: 4px;
+            border: 1px solid var(--card-border);
+            transition: all 0.2s;
+        }
+
+        .checkbox-group label:hover { border-color: var(--accent); }
+        .checkbox-group input:checked + span { color: var(--accent); }
+        .checkbox-group input { accent-color: var(--accent); width: 14px; height: 14px; }
+
+        /* Summary Cards */
+        .summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .card {
+            background: var(--card);
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius);
+            padding: 20px;
+        }
+
+        .card-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-dim);
+            margin-bottom: 4px;
+        }
+
+        .card-value { font-size: 28px; font-weight: 700; }
+        .card-value.cost { color: var(--accent); }
+        .card-sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+
+        /* Chart */
+        .chart-container {
+            background: var(--card);
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius);
+            padding: 20px;
+            margin-bottom: 24px;
+        }
+
+        .section-title {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-muted);
+            margin-bottom: 16px;
+        }
+
+        .chart-wrapper { position: relative; height: 300px; }
+
+        /* Table */
+        .table-container {
+            background: var(--card);
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius);
+            overflow: hidden;
+            margin-bottom: 24px;
+        }
+
+        .table-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--card-border);
+        }
+
+        .table-scroll { overflow-x: auto; }
+
+        table { width: 100%; border-collapse: collapse; }
+
+        th {
+            padding: 10px 16px;
+            text-align: left;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-dim);
+            font-weight: 500;
+            border-bottom: 1px solid var(--card-border);
+            cursor: pointer;
+            user-select: none;
+            white-space: nowrap;
+        }
+
+        th:hover { color: var(--text-muted); }
+        th.sorted { color: var(--accent); }
+
+        td {
+            padding: 10px 16px;
+            font-size: 13px;
+            border-bottom: 1px solid #1a1a2a;
+            white-space: nowrap;
+            font-variant-numeric: tabular-nums;
+        }
+
+        tr:hover td { background: #1a1a24; }
+        tr.selected td { background: #1c1508; }
+        tr.selected:hover td { background: #261e0a; }
+        .num { text-align: right; }
+
+        /* Selection bar */
+        .selection-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: #1a1508;
+            border-top: 2px solid var(--accent);
+            padding: 12px 24px;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            gap: 24px;
+            font-size: 13px;
+            z-index: 100;
+            box-shadow: 0 -4px 20px rgba(0,0,0,0.5);
+        }
+
+        .selection-bar.visible { display: flex; }
+
+        .selection-bar .sel-label {
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        .selection-bar .sel-value {
+            color: var(--accent);
+            font-weight: 700;
+            font-size: 15px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .selection-bar .sel-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .selection-bar .sel-clear {
+            margin-left: 12px;
+            cursor: pointer;
+            color: var(--text-dim);
+            padding: 4px 10px;
+            border-radius: 4px;
+            border: 1px solid var(--card-border);
+            background: none;
+            font-size: 12px;
+        }
+
+        .selection-bar .sel-clear:hover { border-color: var(--accent); color: var(--text); }
+
+        /* Empty / Loading */
+        .empty-state {
+            text-align: center;
+            padding: 60px 24px;
+            color: var(--text-dim);
+        }
+
+        .empty-state p { font-size: 14px; margin-top: 8px; }
+
+        .spinner {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid var(--card-border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+            vertical-align: middle;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding: 16px;
+            font-size: 11px;
+            color: var(--text-dim);
+        }
+
+        .footer a { color: var(--accent); text-decoration: none; }
+
+        @media (max-width: 768px) {
+            .container { padding: 16px; }
+            .header { flex-direction: column; align-items: flex-start; }
+            .card-value { font-size: 22px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Anthropic Usage Dashboard</h1>
+            <div class="api-key-group">
+                <label>Admin API Key</label>
+                <input type="password" id="apiKey" placeholder="sk-ant-admin-..." style="width: 300px;" />
+                <button class="btn-sm" id="toggleKey">Show</button>
+            </div>
+        </div>
+
+        <div class="controls">
+            <div class="controls-grid">
+                <div class="control-group">
+                    <label class="control-label">Start Date</label>
+                    <input type="datetime-local" id="startDate" />
+                </div>
+                <div class="control-group">
+                    <label class="control-label">End Date</label>
+                    <input type="datetime-local" id="endDate" />
+                </div>
+                <div class="control-group">
+                    <label class="control-label">Bucket Width</label>
+                    <select id="bucketWidth">
+                        <option value="1d" selected>1 Day</option>
+                        <option value="1h">1 Hour</option>
+                        <option value="1m">1 Minute</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label class="control-label">Group By</label>
+                    <select id="groupBy">
+                        <option value="model" selected>Model</option>
+                        <option value="api_key_id">API Key</option>
+                        <option value="workspace_id">Workspace</option>
+                        <option value="service_tier">Service Tier</option>
+                        <option value="context_window">Context Window</option>
+                        <option value="inference_geo">Data Residency</option>
+                        <option value="speed">Speed (beta)</option>
+                    </select>
+                </div>
+            </div>
+
+            <div style="margin-bottom: 16px;">
+                <label class="control-label" style="display:block; margin-bottom:8px;">Service Tier</label>
+                <div class="checkbox-group">
+                    <label><input type="checkbox" name="tier" value="standard" checked /><span>Standard</span></label>
+                    <label><input type="checkbox" name="tier" value="batch" checked /><span>Batch</span></label>
+                    <label><input type="checkbox" name="tier" value="flex" checked /><span>Flex</span></label>
+                    <label><input type="checkbox" name="tier" value="flex_discount" checked /><span>Flex Discount</span></label>
+                    <label><input type="checkbox" name="tier" value="priority" checked /><span>Priority</span></label>
+                    <label><input type="checkbox" name="tier" value="priority_on_demand" checked /><span>Priority On-Demand</span></label>
+                </div>
+            </div>
+
+            <div class="controls-actions">
+                <button class="primary" id="fetchBtn">Fetch Usage</button>
+                <button id="exportBtn">Export CSV</button>
+                <span class="status" id="status"></span>
+            </div>
+        </div>
+
+        <div class="summary" id="summary" style="display:none;">
+            <div class="card">
+                <div class="card-label">Estimated Total Cost</div>
+                <div class="card-value cost" id="totalCost">$0.00</div>
+                <div class="card-sub" id="costSub"></div>
+            </div>
+            <div class="card">
+                <div class="card-label">Input Tokens</div>
+                <div class="card-value" id="totalInput">0</div>
+                <div class="card-sub" id="inputSub"></div>
+            </div>
+            <div class="card">
+                <div class="card-label">Output Tokens</div>
+                <div class="card-value" id="totalOutput">0</div>
+                <div class="card-sub" id="outputSub"></div>
+            </div>
+            <div class="card">
+                <div class="card-label">Cache Read Tokens</div>
+                <div class="card-value" id="totalCacheRead">0</div>
+                <div class="card-sub" id="cacheSub"></div>
+            </div>
+        </div>
+
+        <div class="chart-container" id="chartSection" style="display:none;">
+            <div class="section-title">Cost Over Time</div>
+            <div class="chart-wrapper">
+                <canvas id="costChart"></canvas>
+            </div>
+        </div>
+
+        <div class="table-container" id="tableSection" style="display:none;">
+            <div class="table-bar">
+                <div class="section-title" style="margin:0">Detailed Breakdown</div>
+                <span class="status" id="rowCount"></span>
+            </div>
+            <div class="table-scroll">
+                <table>
+                    <thead id="tableHead"></thead>
+                    <tbody id="tableBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="table-container" id="costLogSection" style="display:none;">
+            <div class="table-bar">
+                <div class="section-title" style="margin:0">Cost Log (per entry)</div>
+                <span class="status" id="logCount"></span>
+            </div>
+            <div class="table-scroll">
+                <table>
+                    <thead id="logHead"></thead>
+                    <tbody id="logBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="empty-state" id="emptyState">
+            <p style="font-size:16px;">Enter your Admin API key and click <strong>Fetch Usage</strong></p>
+            <p>Requires an admin key (<code style="background:#1e1e2e;padding:2px 6px;border-radius:4px;font-size:12px;">sk-ant-admin-...</code>) from the Anthropic Console.</p>
+        </div>
+
+        <div class="selection-bar" id="selectionBar">
+            <div class="sel-item"><span class="sel-label">Selected:</span> <span class="sel-value" id="selCount">0</span></div>
+            <div class="sel-item"><span class="sel-label">Input $</span> <span class="sel-value" id="selInput">$0</span></div>
+            <div class="sel-item"><span class="sel-label">Output $</span> <span class="sel-value" id="selOutput">$0</span></div>
+            <div class="sel-item"><span class="sel-label">Cache $</span> <span class="sel-value" id="selCache">$0</span></div>
+            <div class="sel-item"><span class="sel-label">Total</span> <span class="sel-value" id="selTotal" style="font-size:18px;">$0</span></div>
+            <button class="sel-clear" onclick="clearSelection()">Clear</button>
+        </div>
+
+        <div class="footer">
+            Pricing estimates based on published rates &mdash; verify at
+            <a href="https://docs.anthropic.com/en/docs/about-claude/pricing" target="_blank" rel="noopener">Anthropic Pricing</a>.
+            Your API key is kept in memory only and sent to api.anthropic.com via server-side proxy.
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
